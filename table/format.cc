@@ -4,6 +4,8 @@
 
 #include "table/format.h"
 
+#include <cstring>
+#include <zlib.h>
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "table/block.h"
@@ -128,6 +130,22 @@ Status ReadBlock(RandomAccessFile* file,
         delete[] ubuf;
         return Status::Corruption("corrupted compressed block contents");
       }
+      delete[] buf;
+      result->data = Slice(ubuf, ulength);
+      result->heap_allocated = true;
+      result->cachable = true;
+      break;
+    }
+    case kZlibCompression: {
+      Bytef tempbuf[0x20000];
+      uLongf ulength = sizeof(tempbuf);
+      int status = uncompress(tempbuf, &ulength, (const Bytef*) data, n);
+      if (status != Z_OK) {
+          delete[] buf;
+          return Status::Corruption("Zlib failed");
+      }
+      char* ubuf = new char[ulength];
+      memcpy(ubuf, tempbuf, ulength);
       delete[] buf;
       result->data = Slice(ubuf, ulength);
       result->heap_allocated = true;

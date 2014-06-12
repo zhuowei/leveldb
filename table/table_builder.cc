@@ -5,6 +5,7 @@
 #include "leveldb/table_builder.h"
 
 #include <assert.h>
+#include <zlib.h>
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
@@ -161,6 +162,18 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
       } else {
         // Snappy not supported, or compressed less than 12.5%, so just
         // store uncompressed form
+        block_contents = raw;
+        type = kNoCompression;
+      }
+      break;
+    }
+    case kZlibCompression: {
+      Bytef compressed[compressBound(raw.size())];
+      uLongf compressedSize = sizeof(compressed);
+      int status = compress(compressed, &compressedSize, (const Bytef*) raw.data(), raw.size());
+      if (status == Z_OK && compressedSize < raw.size() - (raw.size() / 8u)) {
+        block_contents = Slice((const char*) compressed, compressedSize);
+      } else {
         block_contents = raw;
         type = kNoCompression;
       }
